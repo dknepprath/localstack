@@ -570,5 +570,6 @@ class ProxyListenerS3(ProxyListener):
         else:
             return False
 
+
 # instantiate listener
 UPDATE_S3 = ProxyListenerS3()

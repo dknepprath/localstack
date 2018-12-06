@@ -97,6 +97,13 @@ def test_s3_multipart_upload_notification():
     queue_url = sqs_client.create_queue(QueueName=TEST_QUEUE_FOR_BUCKET_WITH_NOTIFICATION)['QueueUrl']
     queue_attributes = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['QueueArn'])
 
+    # data = ''.join(['a'] * 5242880)
+    # print(data)
+
+    with open('5mbfile','wb') as f:
+        f.seek(5242880)
+        f.write("\0")
+
     # create test bucket
     s3_client.create_bucket(Bucket=TEST_BUCKET_WITH_NOTIFICATION)
     s3_client.put_bucket_notification_configuration(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
@@ -104,39 +111,31 @@ def test_s3_multipart_upload_notification():
                                                         {'QueueArn': queue_attributes['Attributes']['QueueArn'],
                                                          'Events': ['s3:ObjectCreated:*']}]})
 
-
-    part = 1
-    multipart_key = "multipart_object_new"
     multipart_upload_parts = []
-    multipart_upload_dict = s3_client.create_multipart_upload(Bucket=test_bucket,
-                                                              Key=multipart_key)
+
+    multipart_upload_dict = s3_client.create_multipart_upload(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
+                                                              Key=key_by_path)
 
     uploadId = multipart_upload_dict['UploadId']
 
-    Blob data = Blob.valueOf('a'.repeat(5242880));
+    with open('5mbfile', 'r') as data:
+        response = s3_client.upload_part(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
+                                         Body=data.read(),
+                                         Key=key_by_path,
+                                         PartNumber=1,
+                                         UploadId=uploadId)
+    multipart_upload_parts.append({'ETag': response['ETag'], 'PartNumber': 1})
 
-    s3_client.upload_part(Bucket=test_bucket,
-                          Body=data.read(),
-                          Key=multipart_key,
-                          PartNumber=part,
-                          UploadId=multipart_upload_dict['UploadId'])
-
-    # put an object where the bucket_name is in the path
-    s3_client.put_object(Bucket=TEST_BUCKET_WITH_NOTIFICATION, Key=key_by_path, Body='something')
-
-    # put an object where the bucket_name is in the host
-    # it doesn't care about the authorization header as long as it's present
-    headers = {'Host': '{}.s3.amazonaws.com'.format(TEST_BUCKET_WITH_NOTIFICATION), 'authorization': 'some_token'}
-    url = '{}/{}'.format(os.getenv('TEST_S3_URL'), key_by_host)
-    # verify=False must be set as this test fails on travis because of an SSL error non-existent locally
-    response = requests.put(url, data='something else', headers=headers, verify=False)
-    assert response.ok
+    response = s3_client.complete_multipart_upload(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
+                                                   Key=key_by_path,
+                                                   MultipartUpload={'Parts': multipart_upload_parts},
+                                                   UploadId=uploadId)
 
     queue_attributes = sqs_client.get_queue_attributes(QueueUrl=queue_url,
                                                        AttributeNames=['ApproximateNumberOfMessages'])
     message_count = queue_attributes['Attributes']['ApproximateNumberOfMessages']
     # the ApproximateNumberOfMessages attribute is a string
-    assert message_count == '2'
+    assert message_count == '1'
 
     # clean up
     sqs_client.delete_queue(QueueUrl=queue_url)
