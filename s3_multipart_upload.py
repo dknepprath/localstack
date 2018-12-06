@@ -122,16 +122,16 @@ def multipart_upload():
     # TODO grab the ETag valu and PartNumber and store in an array for completing the upload
 
     # ABORT UPLOAD
-    reponse = s3_client.abort_multipart_upload(Bucket=test_bucket,
-                                               Key=multipart_key,
-                                               UploadId=multipart_upload_dict['UploadId'])
+    # reponse = s3_client.abort_multipart_upload(Bucket=test_bucket,
+    #                                            Key=multipart_key,
+    #                                            UploadId=multipart_upload_dict['UploadId'])
 
 
     # COMPLETE UPLOAD
-    # response = s3_client.complete_multipart_upload(Bucket=test_bucket,
-    #                                     Key=multipart_key,
-    #                                     MultipartUpload={'Parts': multipart_upload_parts},
-    #                                     UploadId=multipart_upload_dict['UploadId'])
+    response = s3_client.complete_multipart_upload(Bucket=test_bucket,
+                                        Key=multipart_key,
+                                        MultipartUpload={'Parts': multipart_upload_parts},
+                                        UploadId=multipart_upload_dict['UploadId'])
     print(response)
 
 
@@ -140,11 +140,13 @@ def multipart_upload():
 
 
 if __name__ == "__main__":
-    create_lambda_function()
     # create_event_source_mapping()
-    create_bucket()
     # multipart_upload()
-    # put_object_in_bucket()
-    put_bucket_notification_configuration()
-    invoke_lambda()
+    put_object_in_bucket()
+
+    # INITIALIZE
+    # create_lambda_function()
+    # create_bucket()
+    # put_bucket_notification_configuration()
+    # invoke_lambda()
 
