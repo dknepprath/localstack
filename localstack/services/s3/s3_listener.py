@@ -502,9 +502,7 @@ class ProxyListenerS3(ProxyListener):
             # check if this is an actual put object request, because it could also be
             # a put bucket request with a path like this: /bucket_name/
             bucket_name_in_host or (len(path[1:].split('/')) > 1 and len(path[1:].split('/')[1]) > 0),
-            # don't send notification if url has a query part (some/path/with?query)
-            # (query can be one of 'notification', 'lifecycle', 'tagging', etc)
-            not parsed.query
+            self.is_query_allowable(method, parsed)
         ])
 
         # get subscribers and send bucket notifications
@@ -562,6 +560,15 @@ class ProxyListenerS3(ProxyListener):
             if method == 'DELETE':
                 response.headers['content-length'] = len(response._content)
 
+    # Generally if there is a query (some/path/with?query) we don't want to send notifications
+    def is_query_allowable(self, method, parsed):
+        if not parsed.query:
+            return True
+        # Except we do want to notify on a multipart upload completion, which does use a query.
+        elif method == 'POST' and parsed.query.startswith('uploadId'):
+            return True
+        else:
+            return False
 
 # instantiate listener
 UPDATE_S3 = ProxyListenerS3()
