@@ -97,13 +97,6 @@ def test_s3_multipart_upload_notification():
     queue_url = sqs_client.create_queue(QueueName=TEST_QUEUE_FOR_BUCKET_WITH_NOTIFICATION)['QueueUrl']
     queue_attributes = sqs_client.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['QueueArn'])
 
-    # data = ''.join(['a'] * 5242880)
-    # print(data)
-
-    with open('5mbfile','wb') as f:
-        f.seek(5242880)
-        f.write("\0")
-
     # create test bucket
     s3_client.create_bucket(Bucket=TEST_BUCKET_WITH_NOTIFICATION)
     s3_client.put_bucket_notification_configuration(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
@@ -111,22 +104,26 @@ def test_s3_multipart_upload_notification():
                                                         {'QueueArn': queue_attributes['Attributes']['QueueArn'],
                                                          'Events': ['s3:ObjectCreated:*']}]})
 
-    multipart_upload_parts = []
 
     multipart_upload_dict = s3_client.create_multipart_upload(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
                                                               Key=key_by_path)
-
     uploadId = multipart_upload_dict['UploadId']
 
-    with open('5mbfile', 'r') as data:
-        response = s3_client.upload_part(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
-                                         Body=data.read(),
-                                         Key=key_by_path,
-                                         PartNumber=1,
-                                         UploadId=uploadId)
-    multipart_upload_parts.append({'ETag': response['ETag'], 'PartNumber': 1})
+    # Write contents to memory rather than a file.
+    upload_file_object = BytesIO()
+    data = '000000000000000000000000000000'
+    with gzip.GzipFile(fileobj=upload_file_object, mode='w') as filestream:
+        filestream.write(data.encode('utf-8'))
 
-    response = s3_client.complete_multipart_upload(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
+    response = s3_client.upload_part(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
+                                     Body=upload_file_object.getvalue(),
+                                     Key=key_by_path,
+                                     PartNumber=1,
+                                     UploadId=uploadId)
+
+    multipart_upload_parts = [{'ETag': response['ETag'], 'PartNumber': 1}]
+
+    s3_client.complete_multipart_upload(Bucket=TEST_BUCKET_WITH_NOTIFICATION,
                                                    Key=key_by_path,
                                                    MultipartUpload={'Parts': multipart_upload_parts},
                                                    UploadId=uploadId)
